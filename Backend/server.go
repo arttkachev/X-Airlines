@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -15,6 +15,11 @@ import (
 )
 
 const port = ":3000"
+
+// Endpoints
+func Welcome(c *gin.Context) {
+	c.JSON(200, gin.H{"Message": "Welcome to X-Airlines"})
+}
 
 func main() {
 
@@ -27,7 +32,7 @@ func main() {
 
 	connectionString := os.Getenv("CONNECTION_STRING")
 
-	// mongo connection
+	// Mongo connection
 	// create a client
 	client, err := mongo.NewClient(options.Client().ApplyURI(connectionString))
 	if err != nil {
@@ -54,16 +59,14 @@ func main() {
 
 	fmt.Println(database)
 
-	// handler of web requests from the frontend. Paras (request address, fnc to handle a request)
-	http.HandleFunc("/", func(res http.ResponseWriter, req *http.Request) {
-		_, err := fmt.Fprintf(res, "City Driver Backend")
-		if err != nil {
-			fmt.Println(err)
-		}
-	})
+	// Routing
+	// create a router
+	gin.SetMode(gin.ReleaseMode)
+	router := gin.New()
 
-	// start a web server listening a port 3000 with no handler. It ha to be called after a handler of requests
-	fmt.Println(fmt.Sprintf("A server is listening a port %s", port))
-	_ = http.ListenAndServe(port, nil) // _ means an empty holder for a var because http.ListenAndServe() returns error which we don't care now
+	// handler of a main page
+	router.GET("/", Welcome)
 
+	// listen and serve
+	router.Run(port)
 }
