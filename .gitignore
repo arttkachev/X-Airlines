@@ -1,0 +1,4 @@
+*.env
+*Backend/pkg
+*Backend/vendor
+*Backend/bin
