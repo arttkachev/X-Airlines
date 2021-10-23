@@ -69,6 +69,8 @@ func main() {
 	router.GET("/", Welcome)
 	router.GET("/users", userController.GetUsers)
 	router.POST("/users", userController.AddUser)
+	router.PUT("/users/:id", userController.UpdateUser)
+	router.DELETE("/users/:id", userController.DeleteUser)
 
 	// listen and serve
 	router.Run(port)
