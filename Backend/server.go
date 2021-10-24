@@ -19,7 +19,7 @@ const port = ":3000"
 
 // Endpoints
 func Welcome(c *gin.Context) {
-	c.JSON(200, gin.H{"Message": "Welcome to X-Airlines"})
+	c.JSON(200, gin.H{"Message": "Welcome to X-Airlines Backend"})
 }
 
 func main() {
@@ -68,6 +68,7 @@ func main() {
 	// handlers
 	router.GET("/", Welcome)
 	router.GET("/users", userController.GetUsers)
+	router.GET("/users/airline_filter", userController.GetUserByAirline)
 	router.POST("/users", userController.AddUser)
 	router.PUT("/users/:id", userController.UpdateUser)
 	router.DELETE("/users/:id", userController.DeleteUser)

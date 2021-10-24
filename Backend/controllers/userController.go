@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/arttkachev/X-Airlines/Backend/api/models"
 	userService "github.com/arttkachev/X-Airlines/Backend/services"
@@ -20,15 +21,36 @@ func AddUser(c *gin.Context) {
 	}
 
 	user.ID = xid.New().String() // xid lib set a unique ID
-	users := userService.GetRepository()
 
 	// add a new user
-	*users = append(*users, user)
+	*userService.GetRepository() = append(*userService.GetRepository(), user)
 	c.JSON(http.StatusOK, user) // sends a response with httpStatusOK and a newly created user as a JSON
 }
 
 func GetUsers(c *gin.Context) {
 	c.JSON(http.StatusOK, userService.GetRepository()) //marshals the users array to JSON
+}
+
+func GetUserByAirline(c *gin.Context) {
+	users := make([]models.User, 0)
+	airline := c.Query("airlines")
+	// loop through all users
+	for i := 0; i < len(*userService.GetRepository()); i++ {
+		// check user's airlines
+		for _, t := range (*userService.GetRepository())[i].Airlines {
+			// if requested airline is found in the list of this user, then this user is a right one for filtering
+			if strings.EqualFold(t, airline) {
+				// add to list of filtered users
+				users = append(users, (*userService.GetRepository())[i])
+			}
+		}
+	}
+	if len(users) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "Users not found"})
+		return
+	}
+	c.JSON(http.StatusOK, users)
 }
 
 func UpdateUser(c *gin.Context) {
@@ -47,8 +69,14 @@ func UpdateUser(c *gin.Context) {
 	for i := 0; i < len(*userService.GetRepository()); i++ {
 		// check if it's a right one by id
 		if (*userService.GetRepository())[i].ID == id {
-			// if found, set a new user info and send him to the client
-			(*userService.GetRepository())[i] = user
+			// if found, set a new user info (per/field to save ID) and send him to the client
+			(*userService.GetRepository())[i].Airlines = user.Airlines
+			(*userService.GetRepository())[i].Balance = user.Balance
+			(*userService.GetRepository())[i].Email = user.Email
+			(*userService.GetRepository())[i].IsAdmin = user.IsAdmin
+			(*userService.GetRepository())[i].Name = user.Name
+			(*userService.GetRepository())[i].Password = user.Password
+			user = (*userService.GetRepository())[i]
 			c.JSON(http.StatusOK, user)
 			return
 		}
