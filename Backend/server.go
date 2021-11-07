@@ -8,6 +8,7 @@ import (
 	"time"
 
 	userController "github.com/arttkachev/X-Airlines/Backend/controllers"
+	"github.com/arttkachev/X-Airlines/Backend/services"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson"
@@ -31,11 +32,9 @@ func main() {
 		return
 	}
 
-	connectionString := os.Getenv("CONNECTION_STRING")
-
 	// Mongo connection
 	// create a client
-	client, err := mongo.NewClient(options.Client().ApplyURI(connectionString))
+	client, err := mongo.NewClient(options.Client().ApplyURI(os.Getenv("CONNECTION_STRING")))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -59,6 +58,7 @@ func main() {
 	}
 
 	fmt.Println(database)
+	services.SetRepository(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("COLLECTION")))
 
 	// Routing
 	// create a router
@@ -69,7 +69,7 @@ func main() {
 	router.GET("/", Welcome)
 	router.GET("/users", userController.GetUsers)
 	router.GET("/users/airline_filter", userController.GetUserByAirline)
-	router.POST("/users", userController.AddUser)
+	router.POST("/users", userController.CreateUser)
 	router.PUT("/users/:id", userController.UpdateUser)
 	router.DELETE("/users/:id", userController.DeleteUser)
 
