@@ -4,6 +4,7 @@ import "go.mongodb.org/mongo-driver/bson/primitive"
 
 // aircraft model
 type Aircraft struct {
+	ID                  primitive.ObjectID   `json:"id" bson:"_id"`
 	Name                string               `json:"name" bson:"name`
 	Icon                string               `json:"icon" bson:"icon`
 	General             string               `json:"general" bson:"general`
