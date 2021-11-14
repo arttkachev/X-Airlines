@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	aircraftController "github.com/arttkachev/X-Airlines/Backend/controllers"
 	userController "github.com/arttkachev/X-Airlines/Backend/controllers"
 	"github.com/arttkachev/X-Airlines/Backend/services"
 	"github.com/gin-gonic/gin"
@@ -58,7 +59,8 @@ func main() {
 	}
 
 	fmt.Println(database)
-	services.SetRepository(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("COLLECTION")))
+	services.SetUserRepository(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("USERS")))
+	services.SetAircraftRepository(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("AIRCRAFT")))
 
 	// Routing
 	// create a router
@@ -66,12 +68,18 @@ func main() {
 	router := gin.New()
 
 	// handlers
+	// users
 	router.GET("/", Welcome)
 	router.GET("/users", userController.GetUsers)
 	router.GET("/users/airline_filter", userController.GetUserByAirline)
 	router.POST("/users", userController.CreateUser)
 	router.PUT("/users/:id", userController.UpdateUser)
 	router.DELETE("/users/:id", userController.DeleteUser)
+
+	// aircraft
+	router.GET("/aircraft", aircraftController.GetAircraft)
+	router.POST("/aircraft", aircraftController.CreateAircraft)
+	router.DELETE("/aircraft/:id", aircraftController.DeleteAircraft)
 
 	// listen and serve
 	router.Run(port)

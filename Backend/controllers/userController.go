@@ -27,7 +27,7 @@ func CreateUser(c *gin.Context) {
 	user.ID = primitive.NewObjectID()
 
 	// get db collection
-	collection := services.GetRepository()
+	collection := services.GetUserRepository()
 
 	// create context
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -46,7 +46,7 @@ func CreateUser(c *gin.Context) {
 func GetUsers(c *gin.Context) {
 
 	// get db collection
-	collection := services.GetRepository()
+	collection := services.GetUserRepository()
 
 	// create context
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -86,7 +86,7 @@ func GetUsers(c *gin.Context) {
 
 func GetUserByAirline(c *gin.Context) {
 	// get db collection
-	collection := services.GetRepository()
+	collection := services.GetUserRepository()
 
 	// create context
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -143,7 +143,7 @@ func UpdateUser(c *gin.Context) {
 	}
 
 	// get db collection
-	collection := services.GetRepository()
+	collection := services.GetUserRepository()
 
 	// create context
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -207,7 +207,7 @@ func UpdateUser(c *gin.Context) {
 func DeleteUser(c *gin.Context) {
 
 	// get db collection
-	collection := services.GetRepository()
+	collection := services.GetUserRepository()
 
 	// create context
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
