@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/arttkachev/X-Airlines/Backend/api/models"
+	"github.com/arttkachev/X-Airlines/Backend/api/models/user"
 	"github.com/arttkachev/X-Airlines/Backend/services"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
@@ -14,62 +14,56 @@ import (
 )
 
 func CreateUser(c *gin.Context) {
-
-	var user models.User
-	err := c.ShouldBindJSON(&user) // ShouldBindJSON marshals the incoming request body into a struct passed in as an argument (it's user in our case)
-	if err != nil {
+	var user user.User
+	bindErr := c.ShouldBindJSON(&user) // ShouldBindJSON marshals the incoming request body into a struct passed in as an argument (it's user in our case)
+	if bindErr != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error()})
+			"error": bindErr.Error()})
 		return
 	}
-
-	// generate a unique id for a user
-	user.ID = primitive.NewObjectID()
-
-	// get db collection
-	collection := services.GetUserRepository()
-
 	// create context
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
+	// generate a unique id for a user
+	user.ID = primitive.NewObjectID()
+	// get db collection
+	collection := services.GetUserRepository()
 	// add a new user
-	_, err = collection.InsertOne(ctx, user)
-	if err != nil {
+	if user.Airlines == nil {
+		user.Airlines = make([]string, 0)
+	}
+	_, insertErr := collection.InsertOne(ctx, user)
+	if insertErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error()})
+			"error": insertErr.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, user) // sends a response with httpStatusOK and a newly created user as a JSON
 }
 
 func GetUsers(c *gin.Context) {
-
-	// get db collection
-	collection := services.GetUserRepository()
-
 	// create context
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
+	// get db collection
+	collection := services.GetUserRepository()
 	// get a stream of documents (cursor) from mongo collection
-	cur, err := collection.Find(ctx, bson.M{})
+	cur, findErr := collection.Find(ctx, bson.M{})
 	// cursor must be closed on exit form function
 	defer cur.Close(ctx)
-
 	// check on errors
-	if err != nil {
+	if findErr != nil {
 		// return if error
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error()})
+			"error": findErr.Error()})
 		return
 	}
-	// our storage for found users
-	users := make([]models.User, 0)
+	// storage for found users
+	users := make([]user.User, 0)
 
 	// loop through all users with mongo cursor
 	for cur.Next(ctx) {
-		var user models.User
+		var user user.User
 		// decode mongo cursor into the user data type
 		decodeErr := cur.Decode(&user)
 		if decodeErr != nil {
@@ -85,35 +79,29 @@ func GetUsers(c *gin.Context) {
 }
 
 func GetUserByAirline(c *gin.Context) {
-	// get db collection
-	collection := services.GetUserRepository()
-
 	// create context
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
 	// fetch airline from user query
 	airline := c.Query("airlines")
-
+	// get db collection
+	collection := services.GetUserRepository()
 	// get a stream of documents (cursor) from mongo collection by query data
-	cur, err := collection.Find(ctx, bson.M{"airlines": airline})
+	cur, findErr := collection.Find(ctx, bson.M{"airlines": airline})
 	// cursor must be closed on exit form function
 	defer cur.Close(ctx)
-
 	// check on errors
-	if err != nil {
+	if findErr != nil {
 		// return if error
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error()})
+			"error": findErr.Error()})
 		return
 	}
-
-	// our storage for found users
-	users := make([]models.User, 0)
-
+	// storage for found users
+	users := make([]user.User, 0)
 	// loop through all users with mongo cursor
 	for cur.Next(ctx) {
-		var user models.User
+		var user user.User
 		// decode mongo cursor into the user data type
 		decodeErr := cur.Decode(&user)
 		if decodeErr != nil {
@@ -134,25 +122,21 @@ func GetUserByAirline(c *gin.Context) {
 
 func UpdateUser(c *gin.Context) {
 	// unmarshals the request body into a user var and check if no error occured
-	var user models.User
+	var user user.User
 	err := c.ShouldBindJSON(&user)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error()})
 		return
 	}
-
-	// get db collection
-	collection := services.GetUserRepository()
-
 	// create context
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
+	// get db collection
+	collection := services.GetUserRepository()
 	// fetch "id" from the user input
 	id := c.Param("id")
 	objectId, _ := primitive.ObjectIDFromHex(id)
-
 	// create a filter and mongo aggregation conds for PUT request
 	filter := bson.D{{"_id", objectId}}
 	update := bson.D{{"$set", bson.D{
@@ -205,18 +189,14 @@ func UpdateUser(c *gin.Context) {
 }
 
 func DeleteUser(c *gin.Context) {
-
-	// get db collection
-	collection := services.GetUserRepository()
-
 	// create context
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
+	// get db collection
+	collection := services.GetUserRepository()
 	// fetch the user id from the request URL
 	id := c.Param("id")
 	objectId, _ := primitive.ObjectIDFromHex(id)
-
 	// delete by id
 	deleteResult, _ := collection.DeleteOne(ctx, bson.M{"_id": objectId})
 	// respond an error if something's wrong (for example, a wrong id)
