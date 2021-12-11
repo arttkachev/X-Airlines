@@ -13,6 +13,7 @@ import (
 	userController "github.com/arttkachev/X-Airlines/Backend/controllers"
 	"github.com/arttkachev/X-Airlines/Backend/services"
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis"
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -27,6 +28,17 @@ func Welcome(c *gin.Context) {
 }
 
 func main() {
+
+	// init Redis client
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "",
+		DB:       0,
+	})
+	// Ping Redis clinet
+	redisStatus := redisClient.Ping()
+	// print redist status result
+	fmt.Println(redisStatus)
 
 	// load .env file
 	envLoadErr := godotenv.Load()

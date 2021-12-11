@@ -1,4 +1,5 @@
 *.env
+*redis.conf
 *Backend/pkg
 *Backend/vendor
 *Backend/bin
