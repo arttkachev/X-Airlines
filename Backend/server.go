@@ -73,7 +73,7 @@ func main() {
 	}
 
 	fmt.Println(database)
-	services.CreateUserHandler(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("USERS")), redisClient)
+	services.CreateUserService(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("USERS")), redisClient)
 	services.SetAircraftRepository(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("AIRCRAFT")))
 	services.SetEngineRepository(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("ENGINES")))
 	services.SetAirlineRepository(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("AIRLINES")))

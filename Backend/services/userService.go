@@ -7,18 +7,18 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-var userHandler UserHandler
+var userService UserService
 
-type UserHandler struct {
+type UserService struct {
 	Collection  *mongo.Collection
 	RedisClient *redis.Client
 }
 
-func CreateUserHandler(collection *mongo.Collection, redisClient *redis.Client) *UserHandler {
-	userHandler.Collection = collection
-	userHandler.RedisClient = redisClient
-	return &userHandler
+func CreateUserService(collection *mongo.Collection, redisClient *redis.Client) *UserService {
+	userService.Collection = collection
+	userService.RedisClient = redisClient
+	return &userService
 }
-func GetUserHandler() *UserHandler {
-	return &userHandler
+func GetUserService() *UserService {
+	return &userService
 }

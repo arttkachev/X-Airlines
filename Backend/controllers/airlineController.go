@@ -343,8 +343,8 @@ func GetAirlineOwnerData(c *gin.Context) {
 			"error": userIdErr.Error()})
 		return
 	}
-	var userHandler = services.GetUserHandler()
-	userCollection := userHandler.Collection
+	var userService = services.GetUserService()
+	userCollection := userService.Collection
 	var owner user.User
 	userDecodeErr := userCollection.FindOne(ctx, bson.M{"_id": userObjectId}).Decode(&owner)
 	if userDecodeErr != nil {

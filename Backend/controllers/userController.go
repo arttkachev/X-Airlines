@@ -31,8 +31,8 @@ func CreateUser(c *gin.Context) {
 	// generate a unique id for a user
 	user.ID = primitive.NewObjectID()
 	// get db collection
-	var userHandler = services.GetUserHandler()
-	collection := userHandler.Collection
+	var userService = services.GetUserService()
+	collection := userService.Collection
 	// add a new user
 	if user.Airlines == nil {
 		user.Airlines = make([]string, 0)
@@ -45,20 +45,20 @@ func CreateUser(c *gin.Context) {
 	}
 	// clear cache
 	log.Println("Remove user data from Redis")
-	userHandler.RedisClient.Del("users")
+	userService.RedisClient.Del("users")
 	c.JSON(http.StatusOK, user) // sends a response with httpStatusOK and a newly created user as a JSON
 }
 
 func GetUsers(c *gin.Context) {
-	var userHandler = services.GetUserHandler()
-	val, err := userHandler.RedisClient.Get("users").Result()
+	var userService = services.GetUserService()
+	val, err := userService.RedisClient.Get("users").Result()
 	if err == redis.Nil {
 		log.Printf("Request to MongoDB")
 		// create context
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		// get a stream of documents (cursor) from mongo collection
-		cur, err := userHandler.Collection.Find(ctx, bson.M{})
+		cur, err := userService.Collection.Find(ctx, bson.M{})
 		// check on errors
 		if err != nil {
 			// return if error
@@ -85,7 +85,7 @@ func GetUsers(c *gin.Context) {
 		}
 		// Redis value has to be a string, so, we need to Marshal users first and put users on a Redis server
 		data, _ := json.Marshal(users)
-		userHandler.RedisClient.Set("users", string(data), 0)
+		userService.RedisClient.Set("users", string(data), 0)
 		// respond back with found users
 		c.JSON(http.StatusOK, users)
 	} else if err != nil {
@@ -107,8 +107,8 @@ func GetUserByAirline(c *gin.Context) {
 	// fetch airline from user query
 	airline := c.Query("airlines")
 	// get db collection
-	var userHandeler = services.GetUserHandler()
-	collection := userHandeler.Collection
+	var userService = services.GetUserService()
+	collection := userService.Collection
 	// get a stream of documents (cursor) from mongo collection by query data
 	cur, err := collection.Find(ctx, bson.M{"airlines": airline})
 	// cursor must be closed on exit form function
@@ -156,8 +156,8 @@ func UpdateUser(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	// get db collection
-	var userHandler = services.GetUserHandler()
-	collection := userHandler.Collection
+	var userService = services.GetUserService()
+	collection := userService.Collection
 	// fetch "id" from the user input
 	objectId, _ := primitive.ObjectIDFromHex(c.Param("id"))
 	// create a filter and mongo aggregation conds for PUT request
@@ -208,7 +208,7 @@ func UpdateUser(c *gin.Context) {
 	}
 	// clear cache
 	log.Println("Remove user data from Redis")
-	userHandler.RedisClient.Del("users")
+	userService.RedisClient.Del("users")
 	c.JSON(http.StatusOK, gin.H{
 		"message": "The user has been updated"})
 	return
@@ -219,8 +219,8 @@ func DeleteUser(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	// get db collection
-	var userHandeler = services.GetUserHandler()
-	collection := userHandeler.Collection
+	var userService = services.GetUserService()
+	collection := userService.Collection
 	// fetch the user id from the request URL
 	id := c.Param("id")
 	objectId, _ := primitive.ObjectIDFromHex(id)
