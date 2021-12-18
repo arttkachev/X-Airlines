@@ -2,12 +2,16 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
 	"github.com/arttkachev/X-Airlines/Backend/api/models/user"
 	"github.com/arttkachev/X-Airlines/Backend/services"
 	"github.com/gin-gonic/gin"
+
+	"github.com/go-redis/redis"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -15,10 +19,10 @@ import (
 
 func CreateUser(c *gin.Context) {
 	var user user.User
-	bindErr := c.ShouldBindJSON(&user) // ShouldBindJSON marshals the incoming request body into a struct passed in as an argument (it's user in our case)
-	if bindErr != nil {
+	err := c.ShouldBindJSON(&user) // ShouldBindJSON marshals the incoming request body into a struct passed in as an argument (it's user in our case)
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": bindErr.Error()})
+			"error": err.Error()})
 		return
 	}
 	// create context
@@ -27,55 +31,73 @@ func CreateUser(c *gin.Context) {
 	// generate a unique id for a user
 	user.ID = primitive.NewObjectID()
 	// get db collection
-	collection := services.GetUserRepository()
+	var userHandler = services.GetUserHandler()
+	collection := userHandler.Collection
 	// add a new user
 	if user.Airlines == nil {
 		user.Airlines = make([]string, 0)
 	}
-	_, insertErr := collection.InsertOne(ctx, user)
-	if insertErr != nil {
+	_, err = collection.InsertOne(ctx, user)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": insertErr.Error()})
+			"error": err.Error()})
 		return
 	}
+	// clear cache
+	log.Println("Remove user data from Redis")
+	userHandler.RedisClient.Del("users")
 	c.JSON(http.StatusOK, user) // sends a response with httpStatusOK and a newly created user as a JSON
 }
 
 func GetUsers(c *gin.Context) {
-	// create context
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	// get db collection
-	collection := services.GetUserRepository()
-	// get a stream of documents (cursor) from mongo collection
-	cur, findErr := collection.Find(ctx, bson.M{})
-	// cursor must be closed on exit form function
-	defer cur.Close(ctx)
-	// check on errors
-	if findErr != nil {
-		// return if error
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": findErr.Error()})
-		return
-	}
-	// storage for found users
-	users := make([]user.User, 0)
-
-	// loop through all users with mongo cursor
-	for cur.Next(ctx) {
-		var user user.User
-		// decode mongo cursor into the user data type
-		decodeErr := cur.Decode(&user)
-		if decodeErr != nil {
+	var userHandler = services.GetUserHandler()
+	val, err := userHandler.RedisClient.Get("users").Result()
+	if err == redis.Nil {
+		log.Printf("Request to MongoDB")
+		// create context
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		// get a stream of documents (cursor) from mongo collection
+		cur, err := userHandler.Collection.Find(ctx, bson.M{})
+		// check on errors
+		if err != nil {
+			// return if error
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": decodeErr.Error()})
+				"error": err.Error()})
 			return
 		}
-		// append found user
-		users = append(users, user)
+		// cursor must be closed on exit form function
+		defer cur.Close(ctx)
+		// storage for found users
+		users := make([]user.User, 0)
+		// loop through all users with mongo cursor
+		for cur.Next(ctx) {
+			var user user.User
+			// decode mongo cursor into the user data type
+			err = cur.Decode(&user)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": err.Error()})
+				return
+			}
+			// append found user
+			users = append(users, user)
+		}
+		// Redis value has to be a string, so, we need to Marshal users first and put users on a Redis server
+		data, _ := json.Marshal(users)
+		userHandler.RedisClient.Set("users", string(data), 0)
+		// respond back with found users
+		c.JSON(http.StatusOK, users)
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error()})
+		return
+	} else {
+		log.Printf("Request to Redis")
+		users := make([]user.User, 0)
+		json.Unmarshal([]byte(val), &users)
+		c.JSON(http.StatusOK, users)
 	}
-	// respond back with found users
-	c.JSON(http.StatusOK, users)
 }
 
 func GetUserByAirline(c *gin.Context) {
@@ -85,16 +107,17 @@ func GetUserByAirline(c *gin.Context) {
 	// fetch airline from user query
 	airline := c.Query("airlines")
 	// get db collection
-	collection := services.GetUserRepository()
+	var userHandeler = services.GetUserHandler()
+	collection := userHandeler.Collection
 	// get a stream of documents (cursor) from mongo collection by query data
-	cur, findErr := collection.Find(ctx, bson.M{"airlines": airline})
+	cur, err := collection.Find(ctx, bson.M{"airlines": airline})
 	// cursor must be closed on exit form function
 	defer cur.Close(ctx)
 	// check on errors
-	if findErr != nil {
+	if err != nil {
 		// return if error
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": findErr.Error()})
+			"error": err.Error()})
 		return
 	}
 	// storage for found users
@@ -103,10 +126,10 @@ func GetUserByAirline(c *gin.Context) {
 	for cur.Next(ctx) {
 		var user user.User
 		// decode mongo cursor into the user data type
-		decodeErr := cur.Decode(&user)
-		if decodeErr != nil {
+		err = cur.Decode(&user)
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": decodeErr.Error()})
+				"error": err.Error()})
 			return
 		}
 		// append found user
@@ -133,10 +156,10 @@ func UpdateUser(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	// get db collection
-	collection := services.GetUserRepository()
+	var userHandler = services.GetUserHandler()
+	collection := userHandler.Collection
 	// fetch "id" from the user input
-	id := c.Param("id")
-	objectId, _ := primitive.ObjectIDFromHex(id)
+	objectId, _ := primitive.ObjectIDFromHex(c.Param("id"))
 	// create a filter and mongo aggregation conds for PUT request
 	filter := bson.D{{"_id", objectId}}
 	update := bson.D{{"$set", bson.D{
@@ -177,12 +200,15 @@ func UpdateUser(c *gin.Context) {
 				{"else", bson.D{{"$concatArrays", bson.A{"$airlines", bson.D{{"$ifNull", bson.A{user.Airlines, bson.A{}}}}}}}}}}}}}}}
 
 	// update
-	_, updateErr := collection.UpdateOne(ctx, filter, mongo.Pipeline{update})
-	if updateErr != nil {
+	_, err = collection.UpdateOne(ctx, filter, mongo.Pipeline{update})
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": updateErr.Error()})
+			"error": err.Error()})
 		return
 	}
+	// clear cache
+	log.Println("Remove user data from Redis")
+	userHandler.RedisClient.Del("users")
 	c.JSON(http.StatusOK, gin.H{
 		"message": "The user has been updated"})
 	return
@@ -193,7 +219,8 @@ func DeleteUser(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	// get db collection
-	collection := services.GetUserRepository()
+	var userHandeler = services.GetUserHandler()
+	collection := userHandeler.Collection
 	// fetch the user id from the request URL
 	id := c.Param("id")
 	objectId, _ := primitive.ObjectIDFromHex(id)

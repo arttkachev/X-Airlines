@@ -41,39 +41,39 @@ func main() {
 	fmt.Println(redisStatus)
 
 	// load .env file
-	envLoadErr := godotenv.Load()
-	if envLoadErr != nil {
+	err := godotenv.Load()
+	if err != nil {
 		log.Fatal("Error loading .env file")
 		return
 	}
 
 	// Mongo connection
 	// create a client
-	client, clientErr := mongo.NewClient(options.Client().ApplyURI(os.Getenv("CONNECTION_STRING")))
-	if clientErr != nil {
-		log.Fatal(clientErr)
+	client, err := mongo.NewClient(options.Client().ApplyURI(os.Getenv("CONNECTION_STRING")))
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// create a context (context is how long an OS is going to wait before a connection esablished)
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second) // wait 10 seconds
 
 	// connect to db
-	connectionErr := client.Connect(ctx)
-	if connectionErr != nil {
-		log.Fatal(connectionErr)
+	err = client.Connect(ctx)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// make sure to disconnect d when a main func exits. "defer" provides this possibility for us
 	defer client.Disconnect(ctx)
 
 	// check that cnnection works by printing a list of database names of the client
-	database, dbErr := client.ListDatabaseNames(ctx, bson.M{}) // params (context, filter for returned db namesgo )
-	if dbErr != nil {
-		log.Fatal(dbErr)
+	database, err := client.ListDatabaseNames(ctx, bson.M{}) // params (context, filter for returned db namesgo )
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	fmt.Println(database)
-	services.SetUserRepository(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("USERS")))
+	services.CreateUserHandler(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("USERS")), redisClient)
 	services.SetAircraftRepository(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("AIRCRAFT")))
 	services.SetEngineRepository(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("ENGINES")))
 	services.SetAirlineRepository(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("AIRLINES")))
