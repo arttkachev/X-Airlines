@@ -75,7 +75,7 @@ func main() {
 	fmt.Println(database)
 	services.CreateUserService(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("USERS")), redisClient)
 	services.SetAircraftRepository(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("AIRCRAFT")))
-	services.SetEngineRepository(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("ENGINES")))
+	services.CreateEngineService(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("ENGINES")), redisClient)
 	services.SetAirlineRepository(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("AIRLINES")))
 	services.SetFlightRepository(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("FLIGHTS")))
 	services.SetReviewRepository(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("REVIEWS")))
@@ -114,6 +114,7 @@ func main() {
 
 	// engines
 	router.GET("/engines", engineController.GetEngines)
+	router.GET("/engines/:id", engineController.GetEngineById)
 	router.POST("/engines", engineController.CreateEngine)
 	router.PUT("/engines/:id", engineController.UpdateEngine)
 	router.DELETE("/engines/:id", engineController.DeleteEngine)

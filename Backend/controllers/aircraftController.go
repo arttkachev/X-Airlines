@@ -716,7 +716,7 @@ func GetEngineData(c *gin.Context) {
 				"error": engineIdErr.Error()})
 			return
 		}
-		engineCollection := services.GetEngineRepository()
+		engineCollection := services.GetEngineService().Collection
 		var engine aircraft.Engine
 		engineDecodeErr := engineCollection.FindOne(ctx, bson.M{"_id": engineObjectId}).Decode(&engine)
 		if engineDecodeErr != nil {

@@ -163,7 +163,8 @@ func UpdateUser(c *gin.Context) {
 	var userService = services.GetUserService()
 	collection := userService.Collection
 	// fetch "id" from the user input
-	objectId, _ := primitive.ObjectIDFromHex(c.Param("id"))
+	id := c.Param("id")
+	objectId, _ := primitive.ObjectIDFromHex(id)
 	// create a filter and mongo aggregation conds for PUT request
 	filter := bson.D{{"_id", objectId}}
 	update := bson.D{{"$set", bson.D{
@@ -213,6 +214,7 @@ func UpdateUser(c *gin.Context) {
 	// clear cache
 	log.Println("Remove user data from Redis")
 	userService.RedisClient.Del("users")
+	userService.RedisClient.Del("users/" + id)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "The user has been updated"})
 	return
@@ -236,6 +238,10 @@ func DeleteUser(c *gin.Context) {
 			"error": "Error on deleting a user"})
 		return
 	}
+	// clear cache
+	log.Println("Remove user data from Redis")
+	userService.RedisClient.Del("users")
+	userService.RedisClient.Del("users/" + id)
 	// respond a message to a client if everything is ok
 	c.JSON(http.StatusOK, gin.H{
 		"message": "A user has been deleted"})
