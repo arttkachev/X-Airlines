@@ -101,46 +101,50 @@ func GetUsers(c *gin.Context) {
 }
 
 func GetUserByAirline(c *gin.Context) {
-	// create context
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	// fetch airline from user query
 	airline := c.Query("airlines")
-	// get db collection
 	var userService = services.GetUserService()
-	collection := userService.Collection
-	// get a stream of documents (cursor) from mongo collection by query data
-	cur, err := collection.Find(ctx, bson.M{"airlines": airline})
-	// cursor must be closed on exit form function
-	defer cur.Close(ctx)
-	// check on errors
-	if err != nil {
-		// return if error
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error()})
-		return
-	}
-	// storage for found users
-	users := make([]user.User, 0)
-	// loop through all users with mongo cursor
-	for cur.Next(ctx) {
-		var user user.User
-		// decode mongo cursor into the user data type
-		err = cur.Decode(&user)
+	val, err := userService.RedisClient.Get("users/" + airline).Result()
+	if err == redis.Nil {
+		log.Printf("Request to MongoDB")
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		cur, err := userService.Collection.Find(ctx, bson.M{"airlines": airline})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error()})
 			return
 		}
-		// append found user
-		users = append(users, user)
-	}
-	if len(users) == 0 {
-		c.JSON(http.StatusNotFound, gin.H{
-			"message": "Users not found"})
+		defer cur.Close(ctx)
+		users := make([]user.User, 0)
+		for cur.Next(ctx) {
+			var user user.User
+			err = cur.Decode(&user)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": err.Error()})
+				return
+			}
+			users = append(users, user)
+		}
+		if len(users) == 0 {
+			c.JSON(http.StatusNotFound, gin.H{
+				"message": "Users not found"})
+			return
+		}
+		// Redis value has to be a string, so, we need to Marshal users first and put users on a Redis server
+		data, _ := json.Marshal(users)
+		userService.RedisClient.Set("users/"+airline, string(data), 0)
+		c.JSON(http.StatusOK, users)
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error()})
 		return
+	} else {
+		log.Printf("Request to Redis")
+		users := make([]user.User, 0)
+		json.Unmarshal([]byte(val), &users)
+		c.JSON(http.StatusOK, users)
 	}
-	c.JSON(http.StatusOK, users)
 }
 
 func UpdateUser(c *gin.Context) {
