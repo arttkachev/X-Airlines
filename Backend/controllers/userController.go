@@ -50,7 +50,7 @@ func CreateUser(c *gin.Context) {
 }
 
 func GetUsers(c *gin.Context) {
-	var userService = services.GetUserService()
+	userService := services.GetUserService()
 	val, err := userService.RedisClient.Get("users").Result()
 	if err == redis.Nil {
 		log.Printf("Request to MongoDB")
@@ -102,19 +102,19 @@ func GetUsers(c *gin.Context) {
 
 func GetUserByAirline(c *gin.Context) {
 	airline := c.Query("airlines")
-	var userService = services.GetUserService()
+	userService := services.GetUserService()
 	val, err := userService.RedisClient.Get("users/" + airline).Result()
 	if err == redis.Nil {
 		log.Printf("Request to MongoDB")
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		cur, err := userService.Collection.Find(ctx, bson.M{"airlines": airline})
+		defer cur.Close(ctx)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error()})
 			return
 		}
-		defer cur.Close(ctx)
 		users := make([]user.User, 0)
 		for cur.Next(ctx) {
 			var user user.User
@@ -225,7 +225,7 @@ func DeleteUser(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	// get db collection
-	var userService = services.GetUserService()
+	userService := services.GetUserService()
 	collection := userService.Collection
 	// fetch the user id from the request URL
 	id := c.Param("id")

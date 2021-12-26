@@ -26,7 +26,7 @@ func CreateAirline(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	airlineData.ID = primitive.NewObjectID()
-	collection := services.GetAirlineRepository()
+	airlineService := services.GetAirlineService()
 	if airlineData.Fleet == nil {
 		airlineData.Fleet = make([]primitive.ObjectID, 0)
 	}
@@ -36,7 +36,7 @@ func CreateAirline(c *gin.Context) {
 	if airlineData.Routes == nil {
 		airlineData.Routes = make([]primitive.ObjectID, 0)
 	}
-	_, insertErr := collection.InsertOne(ctx, airlineData)
+	_, insertErr := airlineService.Collection.InsertOne(ctx, airlineData)
 	if insertErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": insertErr.Error()})
@@ -49,8 +49,8 @@ func DeleteAirline(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	objectId, _ := primitive.ObjectIDFromHex(c.Param("id"))
-	collection := services.GetAirlineRepository()
-	deleteResult, _ := collection.DeleteOne(ctx, bson.M{"_id": objectId})
+	airlineService := services.GetAirlineService()
+	deleteResult, _ := airlineService.Collection.DeleteOne(ctx, bson.M{"_id": objectId})
 	if deleteResult.DeletedCount == 0 {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Error on deleting an airline"})
@@ -64,8 +64,8 @@ func DeleteAirline(c *gin.Context) {
 func GetAirlines(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	collection := services.GetAirlineRepository()
-	cur, err := collection.Find(ctx, bson.M{})
+	airlineService := services.GetAirlineService()
+	cur, err := airlineService.Collection.Find(ctx, bson.M{})
 	defer cur.Close(ctx)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -97,7 +97,7 @@ func UpdateAirlineGeneral(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	collection := services.GetAirlineRepository()
+	airlineService := services.GetAirlineService()
 	objectId, _ := primitive.ObjectIDFromHex(c.Param("id"))
 	filter := bson.D{{"_id", objectId}}
 	update := bson.D{{"$set", bson.D{
@@ -137,7 +137,7 @@ func UpdateAirlineGeneral(c *gin.Context) {
 				{"then", general.Rating},
 				{"else", "$general.rating"}}}}}}}}
 
-	_, updateErr := collection.UpdateOne(ctx, filter, mongo.Pipeline{update})
+	_, updateErr := airlineService.Collection.UpdateOne(ctx, filter, mongo.Pipeline{update})
 	if updateErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": updateErr.Error()})
@@ -158,7 +158,7 @@ func UpdateReviews(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	collection := services.GetAirlineRepository()
+	airlineService := services.GetAirlineService()
 	objectId, _ := primitive.ObjectIDFromHex(c.Param("id"))
 	filter := bson.D{{"_id", objectId}}
 	update := bson.D{{"$set", bson.D{
@@ -168,7 +168,7 @@ func UpdateReviews(c *gin.Context) {
 				{"then", bson.D{{"$setDifference", bson.A{"$reviews", airline.Reviews}}}},
 				{"else", bson.D{{"$concatArrays", bson.A{"$reviews", bson.D{{"$ifNull", bson.A{airline.Reviews, bson.A{}}}}}}}}}}}}}}}
 
-	_, updateErr := collection.UpdateOne(ctx, filter, mongo.Pipeline{update})
+	_, updateErr := airlineService.Collection.UpdateOne(ctx, filter, mongo.Pipeline{update})
 	if updateErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": updateErr.Error()})
@@ -189,7 +189,7 @@ func UpdateRoutes(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	collection := services.GetAirlineRepository()
+	airlineService := services.GetAirlineService()
 	objectId, _ := primitive.ObjectIDFromHex(c.Param("id"))
 	filter := bson.D{{"_id", objectId}}
 	update := bson.D{{"$set", bson.D{
@@ -199,7 +199,7 @@ func UpdateRoutes(c *gin.Context) {
 				{"then", bson.D{{"$setDifference", bson.A{"$routes", airline.Routes}}}},
 				{"else", bson.D{{"$concatArrays", bson.A{"$routes", bson.D{{"$ifNull", bson.A{airline.Routes, bson.A{}}}}}}}}}}}}}}}
 
-	_, updateErr := collection.UpdateOne(ctx, filter, mongo.Pipeline{update})
+	_, updateErr := airlineService.Collection.UpdateOne(ctx, filter, mongo.Pipeline{update})
 	if updateErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": updateErr.Error()})
@@ -220,7 +220,7 @@ func UpdateFleet(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	collection := services.GetAirlineRepository()
+	airlineService := services.GetAirlineService()
 	objectId, _ := primitive.ObjectIDFromHex(c.Param("id"))
 	filter := bson.D{{"_id", objectId}}
 	update := bson.D{{"$set", bson.D{
@@ -230,7 +230,7 @@ func UpdateFleet(c *gin.Context) {
 				{"then", bson.D{{"$setDifference", bson.A{"$fleet", airline.Fleet}}}},
 				{"else", bson.D{{"$concatArrays", bson.A{"$fleet", bson.D{{"$ifNull", bson.A{airline.Fleet, bson.A{}}}}}}}}}}}}}}}
 
-	_, updateErr := collection.UpdateOne(ctx, filter, mongo.Pipeline{update})
+	_, updateErr := airlineService.Collection.UpdateOne(ctx, filter, mongo.Pipeline{update})
 	if updateErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": updateErr.Error()})
@@ -244,7 +244,7 @@ func UpdateFleet(c *gin.Context) {
 func GetFleetData(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	airlineCollection := services.GetAirlineRepository()
+	airlineService := services.GetAirlineService()
 	aircraftObjectId, aircraftIdErr := primitive.ObjectIDFromHex(c.Param("id"))
 	if aircraftIdErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -252,7 +252,7 @@ func GetFleetData(c *gin.Context) {
 		return
 	}
 	var airlineData airline.Airline
-	airlineDecodeErr := airlineCollection.FindOne(ctx, bson.M{"_id": aircraftObjectId}).Decode(&airlineData)
+	airlineDecodeErr := airlineService.Collection.FindOne(ctx, bson.M{"_id": aircraftObjectId}).Decode(&airlineData)
 	if airlineDecodeErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": airlineDecodeErr.Error()})
@@ -266,9 +266,9 @@ func GetFleetData(c *gin.Context) {
 				"error": fleetIdErr.Error()})
 			return
 		}
-		aircraftCollection := services.GetAircraftRepository()
+		aircraftService := services.GetAircraftService()
 		var fleet aircraft.Aircraft
-		fleetDecodeErr := aircraftCollection.FindOne(ctx, bson.M{"_id": fleetObjectId}).Decode(&fleet)
+		fleetDecodeErr := aircraftService.Collection.FindOne(ctx, bson.M{"_id": fleetObjectId}).Decode(&fleet)
 		if fleetDecodeErr != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": fleetDecodeErr.Error()})
@@ -294,7 +294,7 @@ func UpdateAirlineOwner(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	collection := services.GetAirlineRepository()
+	airlineService := services.GetAirlineService()
 	objectId, _ := primitive.ObjectIDFromHex(c.Param("id"))
 	filter := bson.D{{"_id", objectId}}
 	update := bson.D{{"$set", bson.D{
@@ -304,7 +304,7 @@ func UpdateAirlineOwner(c *gin.Context) {
 				{"then", airline.Owner},
 				{"else", "$owner"}}}}}}}}
 
-	_, updateErr := collection.UpdateOne(ctx, filter, mongo.Pipeline{update})
+	_, updateErr := airlineService.Collection.UpdateOne(ctx, filter, mongo.Pipeline{update})
 	if updateErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": updateErr.Error()})
@@ -318,7 +318,7 @@ func UpdateAirlineOwner(c *gin.Context) {
 func GetAirlineOwnerData(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	airlineCollection := services.GetAirlineRepository()
+	airlineService := services.GetAirlineService()
 	airlineObjectId, airlineIdErr := primitive.ObjectIDFromHex(c.Param("id"))
 	if airlineIdErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -326,7 +326,7 @@ func GetAirlineOwnerData(c *gin.Context) {
 		return
 	}
 	var airline airline.Airline
-	airlineDecodeErr := airlineCollection.FindOne(ctx, bson.M{"_id": airlineObjectId}).Decode(&airline)
+	airlineDecodeErr := airlineService.Collection.FindOne(ctx, bson.M{"_id": airlineObjectId}).Decode(&airline)
 	if airlineDecodeErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": airlineDecodeErr.Error()})

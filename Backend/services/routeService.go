@@ -1,15 +1,22 @@
 package services
 
 import (
+	"github.com/go-redis/redis"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-var routeCollection *mongo.Collection
+var routeService RouteService
 
-func GetRouteRepository() mongo.Collection {
-	return *routeCollection
+type RouteService struct {
+	Collection  *mongo.Collection
+	RedisClient *redis.Client
 }
 
-func SetRouteRepository(newCollection *mongo.Collection) {
-	routeCollection = newCollection
+func CreateRouteService(collection *mongo.Collection, redisClient *redis.Client) *RouteService {
+	routeService.Collection = collection
+	routeService.RedisClient = redisClient
+	return &routeService
+}
+func GetRouteService() *RouteService {
+	return &routeService
 }

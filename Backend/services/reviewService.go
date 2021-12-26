@@ -1,15 +1,22 @@
 package services
 
 import (
+	"github.com/go-redis/redis"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-var reviewCollection *mongo.Collection
+var reviewService ReviewService
 
-func GetReviewRepository() mongo.Collection {
-	return *reviewCollection
+type ReviewService struct {
+	Collection  *mongo.Collection
+	RedisClient *redis.Client
 }
 
-func SetReviewRepository(newCollection *mongo.Collection) {
-	reviewCollection = newCollection
+func CreateReviewService(collection *mongo.Collection, redisClient *redis.Client) *ReviewService {
+	reviewService.Collection = collection
+	reviewService.RedisClient = redisClient
+	return &reviewService
+}
+func GetReviewService() *ReviewService {
+	return &reviewService
 }

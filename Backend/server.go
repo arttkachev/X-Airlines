@@ -74,12 +74,12 @@ func main() {
 
 	fmt.Println(database)
 	services.CreateUserService(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("USERS")), redisClient)
-	services.SetAircraftRepository(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("AIRCRAFT")))
+	services.CreateAircraftService(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("AIRCRAFT")), redisClient)
 	services.CreateEngineService(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("ENGINES")), redisClient)
-	services.SetAirlineRepository(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("AIRLINES")))
-	services.SetFlightRepository(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("FLIGHTS")))
-	services.SetReviewRepository(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("REVIEWS")))
-	services.SetRouteRepository(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("ROUTES")))
+	services.CreateAirlineService(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("AIRLINES")), redisClient)
+	services.CreateFlightService(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("FLIGHTS")), redisClient)
+	services.CreateReviewService(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("REVIEWS")), redisClient)
+	services.CreateRouteService(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("ROUTES")), redisClient)
 
 	// Routing
 	// create a router
@@ -97,6 +97,7 @@ func main() {
 
 	// aircraft
 	router.GET("/aircraft", aircraftController.GetAircraft)
+	router.GET("/aircraft/:id", aircraftController.GetAircraftById)
 	router.GET("/aircraft/aircraft_filter", aircraftController.GetAircraftByType)
 	router.POST("/aircraft", aircraftController.CreateAircraft)
 	router.DELETE("/aircraft/:id", aircraftController.DeleteAircraft)

@@ -5,18 +5,18 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-var engineService UserService
+var engineService EngineService
 
 type EngineService struct {
 	Collection  *mongo.Collection
 	RedisClient *redis.Client
 }
 
-func CreateEngineService(collection *mongo.Collection, redisClient *redis.Client) *UserService {
+func CreateEngineService(collection *mongo.Collection, redisClient *redis.Client) *EngineService {
 	engineService.Collection = collection
 	engineService.RedisClient = redisClient
-	return &userService
+	return &engineService
 }
-func GetEngineService() *UserService {
-	return &userService
+func GetEngineService() *EngineService {
+	return &engineService
 }

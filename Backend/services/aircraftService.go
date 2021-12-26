@@ -1,15 +1,22 @@
 package services
 
 import (
+	"github.com/go-redis/redis"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-var aircraftCollection *mongo.Collection
+var aircraftService AircraftService
 
-func GetAircraftRepository() mongo.Collection {
-	return *aircraftCollection
+type AircraftService struct {
+	Collection  *mongo.Collection
+	RedisClient *redis.Client
 }
 
-func SetAircraftRepository(newCollection *mongo.Collection) {
-	aircraftCollection = newCollection
+func CreateAircraftService(collection *mongo.Collection, redisClient *redis.Client) *AircraftService {
+	aircraftService.Collection = collection
+	aircraftService.RedisClient = redisClient
+	return &aircraftService
+}
+func GetAircraftService() *AircraftService {
+	return &aircraftService
 }
