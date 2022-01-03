@@ -43,6 +43,7 @@ func CreateEngine(c *gin.Context) {
 
 func GetEngines(c *gin.Context) {
 	var engineService = services.GetEngineService()
+	engines := make([]aircraft.Engine, 0)
 	val, err := engineService.RedisClient.Get("engines").Result()
 	if err == redis.Nil {
 		log.Printf("Request to MongoDB")
@@ -55,7 +56,6 @@ func GetEngines(c *gin.Context) {
 			return
 		}
 		defer cur.Close(ctx)
-		engines := make([]aircraft.Engine, 0)
 		for cur.Next(ctx) {
 			var engine aircraft.Engine
 			decodeErr := cur.Decode(&engine)
@@ -68,29 +68,28 @@ func GetEngines(c *gin.Context) {
 		}
 		data, _ := json.Marshal(engines)
 		engineService.RedisClient.Set("engines", string(data), 0)
-		c.JSON(http.StatusOK, engines)
 	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error()})
 		return
 	} else {
 		log.Printf("Request to Redis")
-		engines := make([]aircraft.Engine, 0)
 		json.Unmarshal([]byte(val), &engines)
-		c.JSON(http.StatusOK, engines)
 	}
+	c.JSON(http.StatusOK, engines)
 }
 
 func GetEngineById(c *gin.Context) {
 	id := c.Param("id")
 	objectId, _ := primitive.ObjectIDFromHex(id)
 	var engineService = services.GetEngineService()
+	var engine aircraft.Engine
 	val, err := engineService.RedisClient.Get("engines/" + id).Result()
 	if err == redis.Nil {
 		log.Printf("Request to MongoDB")
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		var engine aircraft.Engine
+
 		err = engineService.Collection.FindOne(ctx, bson.M{"_id": objectId}).Decode(&engine)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -105,17 +104,15 @@ func GetEngineById(c *gin.Context) {
 
 		data, _ := json.Marshal(engine)
 		engineService.RedisClient.Set("engines/"+id, string(data), 0)
-		c.JSON(http.StatusOK, engine)
 	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error()})
 		return
 	} else {
 		log.Printf("Request to Redis")
-		var engine aircraft.Engine
 		json.Unmarshal([]byte(val), &engine)
-		c.JSON(http.StatusOK, engine)
 	}
+	c.JSON(http.StatusOK, engine)
 }
 
 func UpdateEngine(c *gin.Context) {
@@ -174,7 +171,6 @@ func UpdateEngine(c *gin.Context) {
 	engineService.RedisClient.Del("engines/" + id)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "The engine has been updated"})
-	return
 }
 
 func DeleteEngine(c *gin.Context) {
@@ -196,5 +192,4 @@ func DeleteEngine(c *gin.Context) {
 	engineService.RedisClient.Del("engines/" + id)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "An engine has been deleted"})
-	return
 }

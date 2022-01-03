@@ -8,6 +8,7 @@ import (
 	"time"
 
 	aircraft "github.com/arttkachev/X-Airlines/Backend/api/models/aircraft"
+	"github.com/arttkachev/X-Airlines/Backend/api/models/airline"
 	trackerdata "github.com/arttkachev/X-Airlines/Backend/api/models/trackerData"
 	"github.com/arttkachev/X-Airlines/Backend/api/models/user"
 	"github.com/arttkachev/X-Airlines/Backend/services"
@@ -56,6 +57,7 @@ func CreateAircraft(c *gin.Context) {
 
 func GetAircraft(c *gin.Context) {
 	aircraftService := services.GetAircraftService()
+	airplanes := make([]aircraft.Aircraft, 0)
 	val, err := aircraftService.RedisClient.Get("aircraft").Result()
 	if err == redis.Nil {
 		log.Printf("Request to MongoDB")
@@ -68,7 +70,6 @@ func GetAircraft(c *gin.Context) {
 				"error": err.Error()})
 			return
 		}
-		airplanes := make([]aircraft.Aircraft, 0)
 		for cur.Next(ctx) {
 			var airplane aircraft.Aircraft
 			err = cur.Decode(&airplane)
@@ -82,29 +83,27 @@ func GetAircraft(c *gin.Context) {
 		// Redis value has to be a string, so, we need to Marshal users first and put users on a Redis server
 		data, _ := json.Marshal(airplanes)
 		aircraftService.RedisClient.Set("aircraft", string(data), 0)
-		c.JSON(http.StatusOK, airplanes)
 	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error()})
 		return
 	} else {
 		log.Printf("Request to Redis")
-		airplanes := make([]aircraft.Aircraft, 0)
 		json.Unmarshal([]byte(val), &airplanes)
-		c.JSON(http.StatusOK, airplanes)
 	}
+	c.JSON(http.StatusOK, airplanes)
 }
 
 func GetAircraftById(c *gin.Context) {
 	id := c.Param("id")
 	objectId, _ := primitive.ObjectIDFromHex(id)
 	var aircraftService = services.GetAircraftService()
+	var airplane aircraft.Aircraft
 	val, err := aircraftService.RedisClient.Get("aircraft/" + id).Result()
 	if err == redis.Nil {
 		log.Printf("Request to MongoDB")
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		var airplane aircraft.Aircraft
 		err = aircraftService.Collection.FindOne(ctx, bson.M{"_id": objectId}).Decode(&airplane)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -116,25 +115,23 @@ func GetAircraftById(c *gin.Context) {
 				"message": "No such aircraft"})
 			return
 		}
-
 		data, _ := json.Marshal(airplane)
 		aircraftService.RedisClient.Set("aircraft/"+id, string(data), 0)
-		c.JSON(http.StatusOK, airplane)
 	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error()})
 		return
 	} else {
 		log.Printf("Request to Redis")
-		var airplane aircraft.Aircraft
 		json.Unmarshal([]byte(val), &airplane)
-		c.JSON(http.StatusOK, airplane)
 	}
+	c.JSON(http.StatusOK, airplane)
 }
 
 func GetAircraftByType(c *gin.Context) {
 	airplaneQuery := c.Query("aircraft")
 	aircraftService := services.GetAircraftService()
+	foundAirplanes := make([]aircraft.Aircraft, 0)
 	val, err := aircraftService.RedisClient.Get("aircraft/" + airplaneQuery).Result()
 	if err == redis.Nil {
 		log.Printf("Request to MongoDB")
@@ -147,7 +144,6 @@ func GetAircraftByType(c *gin.Context) {
 				"error": err.Error()})
 			return
 		}
-		foundAirplanes := make([]aircraft.Aircraft, 0)
 		for cur.Next(ctx) {
 			var airplane aircraft.Aircraft
 			err = cur.Decode(&airplane)
@@ -156,28 +152,25 @@ func GetAircraftByType(c *gin.Context) {
 					"error": err.Error()})
 				return
 			}
-
 			foundAirplanes = append(foundAirplanes, airplane)
-		}
-		if len(foundAirplanes) == 0 {
-			c.JSON(http.StatusNotFound, gin.H{
-				"message": "Aircraft not found"})
-			return
 		}
 		// Redis value has to be a string, so, we need to Marshal users first and put users on a Redis server
 		data, _ := json.Marshal(foundAirplanes)
 		aircraftService.RedisClient.Set("aircraft/"+airplaneQuery, string(data), 0)
-		c.JSON(http.StatusOK, foundAirplanes)
 	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error()})
 		return
 	} else {
 		log.Printf("Request to Redis")
-		foundAirplanes := make([]aircraft.Aircraft, 0)
 		json.Unmarshal([]byte(val), &foundAirplanes)
-		c.JSON(http.StatusOK, foundAirplanes)
 	}
+	if len(foundAirplanes) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "Aircraft not found"})
+		return
+	}
+	c.JSON(http.StatusOK, foundAirplanes)
 }
 
 func DeleteAircraft(c *gin.Context) {
@@ -197,7 +190,6 @@ func DeleteAircraft(c *gin.Context) {
 	aircraftService.RedisClient.Del("aircraft/" + id)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "An aircraft has been deleted"})
-	return
 }
 
 func UpdateAirframe(c *gin.Context) {
@@ -244,7 +236,6 @@ func UpdateAirframe(c *gin.Context) {
 	aircraftService.RedisClient.Del("aircraft/" + id)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "The aircraft airframe has been updated"})
-	return
 }
 
 func UpdateExterior(c *gin.Context) {
@@ -285,7 +276,6 @@ func UpdateExterior(c *gin.Context) {
 	aircraftService.RedisClient.Del("aircraft/" + id)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "The aircraft exterior has been updated"})
-	return
 }
 
 func UpdateInterior(c *gin.Context) {
@@ -326,7 +316,6 @@ func UpdateInterior(c *gin.Context) {
 	aircraftService.RedisClient.Del("aircraft/" + id)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "The aircraft interior has been updated"})
-	return
 }
 
 func UpdateCockpit(c *gin.Context) {
@@ -361,7 +350,6 @@ func UpdateCockpit(c *gin.Context) {
 	aircraftService.RedisClient.Del("aircraft/" + id)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "The aircraft cockpit has been updated"})
-	return
 }
 
 func UpdateGeneral(c *gin.Context) {
@@ -462,7 +450,6 @@ func UpdateGeneral(c *gin.Context) {
 	aircraftService.RedisClient.Del("aircraft/" + id)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "The aircraft general information has been updated"})
-	return
 }
 
 func UpdatePerformance(c *gin.Context) {
@@ -547,14 +534,16 @@ func UpdatePerformance(c *gin.Context) {
 	}
 	log.Println("Remove aircraft data from Redis")
 	aircraftService.RedisClient.Del("aircraft")
+	aircraftService.RedisClient.Del("aircraft/" + id)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "The aircraft performance has been updated"})
-	return
 }
 
 func UpdateEngines(c *gin.Context) {
-	var aircraft aircraft.Aircraft
-	err := c.ShouldBindJSON(&aircraft)
+	var airplane aircraft.Aircraft
+	aircraftService := services.GetAircraftService()
+	engineService := services.GetEngineService()
+	err := c.ShouldBindJSON(&airplane)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error()})
@@ -562,29 +551,115 @@ func UpdateEngines(c *gin.Context) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	aircraftService := services.GetAircraftService()
 	id := c.Param("id")
-	objectId, _ := primitive.ObjectIDFromHex(id)
-	filter := bson.D{{"_id", objectId}}
+	aircraftObjectId, _ := primitive.ObjectIDFromHex(id)
+
+	// update current owning aircraft info
+	for _, x := range airplane.Engines {
+		var engine aircraft.Engine
+		engineId := x.Hex()
+		engineObjectId, _ := primitive.ObjectIDFromHex(engineId)
+		engineVal, err := engineService.RedisClient.Get("engines/" + engineId).Result()
+		if err == redis.Nil {
+			log.Printf("Request to MongoDB")
+			err = engineService.Collection.FindOne(ctx, bson.M{"_id": engineObjectId}).Decode(&engine)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": err.Error()})
+				return
+			}
+			// Redis value has to be a string, so, we need to Marshal users first and put users on a Redis server
+			data, _ := json.Marshal(engine)
+			engineService.RedisClient.Set("engines/"+engineId, string(data), 0)
+
+		} else if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error()})
+			return
+		} else {
+			log.Printf("Request to Redis")
+			json.Unmarshal([]byte(engineVal), &engine)
+		}
+		if engine.OwningAircraft != primitive.NilObjectID {
+			formerOwningAircraftObjectId, _ := primitive.ObjectIDFromHex(engine.OwningAircraft.Hex())
+			var formerOwningAircraft aircraft.Aircraft
+			formerOwningAircraftVal, err := aircraftService.RedisClient.Get("aircraft/" + engine.OwningAircraft.Hex()).Result()
+			if err == redis.Nil {
+				log.Printf("Request to MongoDB")
+				err = aircraftService.Collection.FindOne(ctx, bson.M{"_id": formerOwningAircraftObjectId}).Decode(&formerOwningAircraft)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"error": err.Error()})
+					return
+				}
+				data, _ := json.Marshal(formerOwningAircraft)
+				aircraftService.RedisClient.Set("aircraft/"+engine.OwningAircraft.Hex(), string(data), 0)
+			} else if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": err.Error()})
+				return
+			} else {
+				log.Printf("Request to Redis")
+				json.Unmarshal([]byte(formerOwningAircraftVal), &formerOwningAircraft)
+			}
+
+			if aircraftObjectId != formerOwningAircraftObjectId {
+				var formerAircraft aircraft.Aircraft
+				formerAircraft.Engines = append(formerAircraft.Engines, x)
+				filter := bson.D{{"_id", formerOwningAircraftObjectId}}
+				update := bson.D{{"$set", bson.D{
+					{"engines", bson.D{
+						{"$cond", bson.D{
+							{"if", bson.D{{"$in", bson.A{bson.D{{"$first", bson.A{bson.D{{"$ifNull", bson.A{formerAircraft.Engines, bson.A{}}}}}}}, formerOwningAircraft.Engines}}}},
+							{"then", bson.D{{"$setDifference", bson.A{formerOwningAircraft.Engines, formerAircraft.Engines}}}},
+							{"else", bson.D{{"$concatArrays", bson.A{formerOwningAircraft.Engines, bson.D{{"$ifNull", bson.A{formerAircraft.Engines, bson.A{}}}}}}}}}}}}}}}
+				_, err = aircraftService.Collection.UpdateOne(ctx, filter, mongo.Pipeline{update})
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{
+						"error": err.Error()})
+					return
+				}
+				log.Println("Remove aircraft id data from Redis")
+				aircraftService.RedisClient.Del("aircraft/" + engine.OwningAircraft.Hex())
+			}
+		}
+		filter := bson.D{{"_id", engineObjectId}}
+		update := bson.D{{"$set", bson.D{
+			{"owningAircraft", bson.D{
+				{"$cond", bson.D{
+					{"if", aircraftObjectId != engine.OwningAircraft},
+					{"then", aircraftObjectId},
+					{"else", primitive.NilObjectID}}}}}}}}
+		_, err = engineService.Collection.UpdateOne(ctx, filter, mongo.Pipeline{update})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error()})
+			return
+		}
+		log.Println("Remove engine id data from Redis")
+		engineService.RedisClient.Del("engines/" + engineId)
+	}
+	filter := bson.D{{"_id", aircraftObjectId}}
 	update := bson.D{{"$set", bson.D{
 		{"engines", bson.D{
 			{"$cond", bson.D{
-				{"if", bson.D{{"$in", bson.A{bson.D{{"$first", bson.A{bson.D{{"$ifNull", bson.A{aircraft.Engines, bson.A{}}}}}}}, "$engines"}}}},
-				{"then", bson.D{{"$setDifference", bson.A{"$engines", aircraft.Engines}}}},
-				{"else", bson.D{{"$concatArrays", bson.A{"$engines", bson.D{{"$ifNull", bson.A{aircraft.Engines, bson.A{}}}}}}}}}}}}}}}
-
+				{"if", bson.D{{"$in", bson.A{bson.D{{"$first", bson.A{bson.D{{"$ifNull", bson.A{airplane.Engines, bson.A{}}}}}}}, "$engines"}}}},
+				{"then", bson.D{{"$setDifference", bson.A{"$engines", airplane.Engines}}}},
+				{"else", bson.D{{"$concatArrays", bson.A{"$engines", bson.D{{"$ifNull", bson.A{airplane.Engines, bson.A{}}}}}}}}}}}}}}}
+	// update engines
 	_, err = aircraftService.Collection.UpdateOne(ctx, filter, mongo.Pipeline{update})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error()})
 		return
 	}
+	log.Println("Remove engines data from Redis")
+	engineService.RedisClient.Del("engines")
 	log.Println("Remove aircraft data from Redis")
 	aircraftService.RedisClient.Del("aircraft")
 	aircraftService.RedisClient.Del("aircraft/" + id)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "The aircraft engines have been updated"})
-	return
 }
 
 func UpdateTags(c *gin.Context) {
@@ -619,7 +694,6 @@ func UpdateTags(c *gin.Context) {
 	aircraftService.RedisClient.Del("aircraft/" + id)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "The aircraft tags have been updated"})
-	return
 }
 
 func UpdateOwner(c *gin.Context) {
@@ -653,7 +727,6 @@ func UpdateOwner(c *gin.Context) {
 	aircraftService.RedisClient.Del("aircraft/" + id)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "The owner has been updated"})
-	return
 }
 
 func GetOwnerData(c *gin.Context) {
@@ -701,37 +774,35 @@ func GetOwnerData(c *gin.Context) {
 			"error": err.Error()})
 		return
 	}
+	var owner user.User
 	userService := services.GetUserService()
 	userVal, err := userService.RedisClient.Get("users/" + userId).Result()
 	if err == redis.Nil {
 		log.Printf("Request to MongoDB")
-		var owner user.User
 		err = userService.Collection.FindOne(ctx, bson.M{"_id": userObjectId}).Decode(&owner)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error()})
 			return
 		}
-		if owner.ID == primitive.NilObjectID {
-			c.JSON(http.StatusNotFound, gin.H{
-				"message": "No owner found"})
-			return
-		}
-
 		//Redis value has to be a string, so, we need to Marshal users first and put users on a Redis server
 		data, _ := json.Marshal(owner)
 		userService.RedisClient.Set("users/"+userId, string(data), 0)
-		c.JSON(http.StatusOK, owner)
 	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error()})
 		return
 	} else {
-		var owner user.User
 		log.Printf("Request to Redis")
 		json.Unmarshal([]byte(userVal), &owner)
-		c.JSON(http.StatusOK, owner)
+
 	}
+	if owner.ID == primitive.NilObjectID {
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "No owner found"})
+		return
+	}
+	c.JSON(http.StatusOK, owner)
 }
 
 func GetEngineData(c *gin.Context) {
@@ -766,7 +837,7 @@ func GetEngineData(c *gin.Context) {
 		log.Printf("Request to Redis")
 		json.Unmarshal([]byte(val), &airplane)
 	}
-
+	engineService := services.GetEngineService()
 	var engines []aircraft.Engine
 	for _, x := range airplane.Engines {
 		engineId := x.Hex()
@@ -776,7 +847,6 @@ func GetEngineData(c *gin.Context) {
 				"error": err.Error()})
 			return
 		}
-		engineService := services.GetEngineService()
 		var engine aircraft.Engine
 		engineVal, err := engineService.RedisClient.Get("engines/" + engineId).Result()
 		if err == redis.Nil {
@@ -787,26 +857,101 @@ func GetEngineData(c *gin.Context) {
 					"error": err.Error()})
 				return
 			}
-			engines = append(engines, engine)
-			if len(engines) == 0 {
-				c.JSON(http.StatusNotFound, gin.H{
-					"message": "The aircraft does not have engines"})
-				return
-			}
 			// Redis value has to be a string, so, we need to Marshal users first and put users on a Redis server
-			data, _ := json.Marshal(engines)
+			data, _ := json.Marshal(engine)
 			aircraftService.RedisClient.Set("engines/"+engineId, string(data), 0)
-			c.JSON(http.StatusOK, engines)
+			engines = append(engines, engine)
 
 		} else if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error()})
 			return
 		} else {
-			var engines []aircraft.Engine
 			log.Printf("Request to Redis")
-			json.Unmarshal([]byte(engineVal), &engines)
-			c.JSON(http.StatusOK, engines)
+			json.Unmarshal([]byte(engineVal), &engine)
+			engines = append(engines, engine)
+
 		}
 	}
+	if len(engines) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "The aircraft does not have engines"})
+		return
+	}
+	c.JSON(http.StatusOK, engines)
+}
+
+func GetAirlineData(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	aircraftId := c.Param("id")
+	var airplane aircraft.Aircraft
+	aircraftService := services.GetAircraftService()
+	val, err := aircraftService.RedisClient.Get("aircraft/" + aircraftId).Result()
+	if err == redis.Nil {
+		log.Printf("Request to MongoDB")
+		aircraftObjectId, err := primitive.ObjectIDFromHex(aircraftId)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error()})
+			return
+		}
+		err = aircraftService.Collection.FindOne(ctx, bson.M{"_id": aircraftObjectId}).Decode(&airplane)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error()})
+			return
+		}
+		// Redis value has to be a string, so, we need to Marshal users first and put users on a Redis server
+		data, _ := json.Marshal(airplane)
+		aircraftService.RedisClient.Set("aircraft/"+aircraftId, string(data), 0)
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error()})
+		return
+	} else {
+		log.Printf("Request to Redis")
+		json.Unmarshal([]byte(val), &airplane)
+	}
+	if len(airplane.General.History) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "The aircraft does not have an operator"})
+		return
+	}
+
+	var airlane airline.Airline
+	airlineService := services.GetAirlineService()
+	airlineId := airplane.General.History[len(airplane.General.History)-1].Hex()
+	airlineObjectId, err := primitive.ObjectIDFromHex(airlineId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error()})
+		return
+	}
+	airlineVal, err := airlineService.RedisClient.Get("airlines/" + airlineId).Result()
+	if err == redis.Nil {
+		log.Printf("Request to MongoDB")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error()})
+			return
+		}
+		err = airlineService.Collection.FindOne(ctx, bson.M{"_id": airlineObjectId}).Decode(&airlane)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error()})
+			return
+		}
+		// Redis value has to be a string, so, we need to Marshal users first and put users on a Redis server
+		data, _ := json.Marshal(airlane)
+		aircraftService.RedisClient.Set("airlines/"+airlineId, string(data), 0)
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error()})
+		return
+	} else {
+		log.Printf("Request to Redis")
+		json.Unmarshal([]byte(airlineVal), &airlane)
+	}
+	c.JSON(http.StatusOK, airlane)
 }

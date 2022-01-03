@@ -112,6 +112,7 @@ func main() {
 	router.PUT("/aircraft/:id/update_owner", aircraftController.UpdateOwner)
 	router.GET("/aircraft/:id/get_owner", aircraftController.GetOwnerData)
 	router.GET("/aircraft/:id/get_engines", aircraftController.GetEngineData)
+	router.GET("/aircraft/:id/get_airline", aircraftController.GetAirlineData)
 
 	// engines
 	router.GET("/engines", engineController.GetEngines)
