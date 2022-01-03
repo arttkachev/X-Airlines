@@ -310,11 +310,11 @@ func UpdateFleet(c *gin.Context) {
 				"error": err.Error()})
 			return
 		}
-		log.Println("Remove aircraft data from Redis")
-		aircraftService.RedisClient.Del("aircraft")
+		log.Println("Remove aircraft id data from Redis")
 		aircraftService.RedisClient.Del("aircraft/" + x.Hex())
-
 	}
+	log.Println("Remove aircraft data from Redis")
+	aircraftService.RedisClient.Del("aircraft")
 	c.JSON(http.StatusOK, gin.H{
 		"message": "The airline fleet has been updated"})
 }
