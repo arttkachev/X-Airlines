@@ -184,7 +184,7 @@ func DeleteAircraft(c *gin.Context) {
 	aircraftVal, err := aircraftService.RedisClient.Get("aircraft/" + id).Result()
 	if err == redis.Nil {
 		log.Printf("Request to MongoDB")
-		err = aircraftService.Collection.FindOne(ctx, bson.M{"_id": objectId}).Decode(airplane)
+		err = aircraftService.Collection.FindOne(ctx, bson.M{"_id": objectId}).Decode(&airplane)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error()})

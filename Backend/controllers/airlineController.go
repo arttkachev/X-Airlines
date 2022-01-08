@@ -61,7 +61,7 @@ func DeleteAirline(c *gin.Context) {
 	airlineVal, err := airlineService.RedisClient.Get("airlines/" + id).Result()
 	if err == redis.Nil {
 		log.Printf("Request to MongoDB")
-		err = airlineService.Collection.FindOne(ctx, bson.M{"_id": objectId}).Decode(airline)
+		err = airlineService.Collection.FindOne(ctx, bson.M{"_id": objectId}).Decode(&airline)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error()})
@@ -513,6 +513,28 @@ func UpdateAirlineOwner(c *gin.Context) {
 	log.Println("Remove airline data from Redis")
 	airlineService.RedisClient.Del("airlines")
 	airlineService.RedisClient.Del("airlines/" + id)
+	userService := services.GetUserService()
+	userId := airline.Owner.Hex()
+	var newAirlines []primitive.ObjectID
+	newAirlines = append(newAirlines, objectId)
+	userObjectId, _ := primitive.ObjectIDFromHex(userId)
+	userFilter := bson.D{{"_id", userObjectId}}
+	userUpdate := bson.D{{"$set", bson.D{
+		{"airlines", bson.D{
+			{"$cond", bson.D{
+				{"if", bson.D{{"$in", bson.A{bson.D{{"$first", bson.A{bson.D{{"$ifNull", bson.A{newAirlines, bson.A{}}}}}}}, "$airlines"}}}},
+				{"then", bson.D{{"$setDifference", bson.A{"$airlines", newAirlines}}}},
+				{"else", bson.D{{"$concatArrays", bson.A{"$airlines", bson.D{{"$ifNull", bson.A{newAirlines, bson.A{}}}}}}}}}}}}}}}
+
+	_, err = userService.Collection.UpdateOne(ctx, userFilter, mongo.Pipeline{userUpdate})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error()})
+		return
+	}
+	log.Println("Remove user data from Redis")
+	userService.RedisClient.Del("users")
+	userService.RedisClient.Del("users/" + userId)
 	c.JSON(http.StatusOK, gin.H{
 		"message": "The owner has been updated"})
 	return

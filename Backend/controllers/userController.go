@@ -187,7 +187,7 @@ func DeleteUser(c *gin.Context) {
 	userVal, err := userService.RedisClient.Get("users/" + id).Result()
 	if err == redis.Nil {
 		log.Printf("Request to MongoDB")
-		err = userService.Collection.FindOne(ctx, bson.M{"_id": objectId}).Decode(user)
+		err = userService.Collection.FindOne(ctx, bson.M{"_id": objectId}).Decode(&user)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error()})
