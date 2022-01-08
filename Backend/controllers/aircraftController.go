@@ -175,21 +175,63 @@ func GetAircraftByType(c *gin.Context) {
 
 func DeleteAircraft(c *gin.Context) {
 	aircraftService := services.GetAircraftService()
+	airlineService := services.GetAirlineService()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	id := c.Param("id")
 	objectId, _ := primitive.ObjectIDFromHex(id)
-	deleteResult, _ := aircraftService.Collection.DeleteOne(ctx, bson.M{"_id": objectId})
-	if deleteResult.DeletedCount == 0 {
+	var airplane aircraft.Aircraft
+	aircraftVal, err := aircraftService.RedisClient.Get("aircraft/" + id).Result()
+	if err == redis.Nil {
+		log.Printf("Request to MongoDB")
+		err = aircraftService.Collection.FindOne(ctx, bson.M{"_id": objectId}).Decode(airplane)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error()})
+			return
+		}
+	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Error on deleting an aircraft"})
+			"error": err.Error()})
 		return
+	} else {
+		log.Printf("Request to Redis")
+		json.Unmarshal([]byte(aircraftVal), &airplane)
 	}
-	log.Println("Remove aircraft data from Redis")
-	aircraftService.RedisClient.Del("aircraft")
-	aircraftService.RedisClient.Del("aircraft/" + id)
-	c.JSON(http.StatusOK, gin.H{
-		"message": "An aircraft has been deleted"})
+	if len(airplane.General.History) > 0 {
+		currentAirlineId := airplane.General.History[len(airplane.General.History)-1].Hex()
+		currentAirlineObjectId, _ := primitive.ObjectIDFromHex(currentAirlineId)
+		var selfAircraft []primitive.ObjectID
+		selfAircraft = append(selfAircraft, objectId)
+		filter := bson.D{{"_id", currentAirlineObjectId}}
+		update := bson.D{{"$set", bson.D{
+			{"fleet", bson.D{
+				{"$cond", bson.D{
+					{"if", bson.D{{"$in", bson.A{bson.D{{"$first", bson.A{bson.D{{"$ifNull", bson.A{selfAircraft, bson.A{}}}}}}}, "$fleet"}}}},
+					{"then", bson.D{{"$setDifference", bson.A{"$fleet", selfAircraft}}}},
+					{"else", bson.D{{"$concatArrays", bson.A{"$fleet", bson.D{{"$ifNull", bson.A{selfAircraft, bson.A{}}}}}}}}}}}}}}}
+
+		_, err = airlineService.Collection.UpdateOne(ctx, filter, mongo.Pipeline{update})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error()})
+			return
+		}
+		log.Println("Remove airline data from Redis")
+		airlineService.RedisClient.Del("airlines")
+		airlineService.RedisClient.Del("airlines/" + currentAirlineId)
+		deleteResult, _ := aircraftService.Collection.DeleteOne(ctx, bson.M{"_id": objectId})
+		if deleteResult.DeletedCount == 0 {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Error on deleting an aircraft"})
+			return
+		}
+		log.Println("Remove aircraft data from Redis")
+		aircraftService.RedisClient.Del("aircraft")
+		aircraftService.RedisClient.Del("aircraft/" + id)
+		c.JSON(http.StatusOK, gin.H{
+			"message": "An aircraft has been deleted"})
+	}
 }
 
 func UpdateAirframe(c *gin.Context) {

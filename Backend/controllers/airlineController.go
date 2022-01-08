@@ -56,7 +56,95 @@ func DeleteAirline(c *gin.Context) {
 	defer cancel()
 	id := c.Param("id")
 	objectId, _ := primitive.ObjectIDFromHex(id)
+	var airline airline.Airline
 	airlineService := services.GetAirlineService()
+	airlineVal, err := airlineService.RedisClient.Get("airlines/" + id).Result()
+	if err == redis.Nil {
+		log.Printf("Request to MongoDB")
+		err = airlineService.Collection.FindOne(ctx, bson.M{"_id": objectId}).Decode(airline)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error()})
+			return
+		}
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error()})
+		return
+	} else {
+		log.Printf("Request to Redis")
+		json.Unmarshal([]byte(airlineVal), &airline)
+	}
+	userService := services.GetUserService()
+	ownerId := airline.Owner.Hex()
+	ownerObjectId, _ := primitive.ObjectIDFromHex(ownerId)
+	var selfAirline []primitive.ObjectID
+	selfAirline = append(selfAirline, objectId)
+	filter := bson.D{{"_id", ownerObjectId}}
+	update := bson.D{{"$set", bson.D{
+		{"airlines", bson.D{
+			{"$cond", bson.D{
+				{"if", bson.D{{"$in", bson.A{bson.D{{"$first", bson.A{bson.D{{"$ifNull", bson.A{selfAirline, bson.A{}}}}}}}, "$airlines"}}}},
+				{"then", bson.D{{"$setDifference", bson.A{"$airlines", selfAirline}}}},
+				{"else", bson.D{{"$concatArrays", bson.A{"$airlines", bson.D{{"$ifNull", bson.A{selfAirline, bson.A{}}}}}}}}}}}}}}}
+
+	_, err = userService.Collection.UpdateOne(ctx, filter, mongo.Pipeline{update})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error()})
+		return
+	}
+	log.Println("Remove user data from Redis")
+	userService.RedisClient.Del("users")
+	userService.RedisClient.Del("users/" + ownerId)
+	aircraftService := services.GetAircraftService()
+	for _, x := range airline.Fleet {
+		var airplane aircraft.Aircraft
+		aircraftId := x.Hex()
+		aircraftObjectId, err := primitive.ObjectIDFromHex(aircraftId)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error()})
+			return
+		}
+		aircraftVal, err := aircraftService.RedisClient.Get("aircraft/" + aircraftId).Result()
+		if err == redis.Nil {
+			log.Printf("Request to MongoDB")
+			err = airlineService.Collection.FindOne(ctx, bson.M{"_id": aircraftObjectId}).Decode(airplane)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": err.Error()})
+				return
+			}
+		} else if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error()})
+			return
+		} else {
+			log.Printf("Request to Redis")
+			json.Unmarshal([]byte(aircraftVal), &airplane)
+		}
+		if len(airplane.General.History) > 0 {
+			var selfAirline []primitive.ObjectID
+			selfAirline = append(selfAirline, objectId)
+			filter := bson.D{{"_id", aircraftObjectId}}
+			update := bson.D{{"$set", bson.D{
+				{"general.history", bson.D{
+					{"$cond", bson.D{
+						{"if", bson.D{{"$in", bson.A{bson.D{{"$first", bson.A{bson.D{{"$ifNull", bson.A{selfAirline, bson.A{}}}}}}}, "$general.history"}}}},
+						{"then", bson.D{{"$setDifference", bson.A{"$general.history", selfAirline}}}},
+						{"else", bson.D{{"$concatArrays", bson.A{"$general.history", bson.D{{"$ifNull", bson.A{selfAirline, bson.A{}}}}}}}}}}}}}}}
+
+			_, err = aircraftService.Collection.UpdateOne(ctx, filter, mongo.Pipeline{update})
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": err.Error()})
+				return
+			}
+			log.Println("Remove aircraft id data from Redis")
+			aircraftService.RedisClient.Del("aircraft/" + aircraftId)
+		}
+	}
 	deleteResult, _ := airlineService.Collection.DeleteOne(ctx, bson.M{"_id": objectId})
 	if deleteResult.DeletedCount == 0 {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -66,6 +154,8 @@ func DeleteAirline(c *gin.Context) {
 	log.Println("Remove airline data from Redis")
 	airlineService.RedisClient.Del("airlines")
 	airlineService.RedisClient.Del("airlines/" + id)
+	log.Println("Remove aircraft data from Redis")
+	aircraftService.RedisClient.Del("aircraft")
 	c.JSON(http.StatusOK, gin.H{
 		"message": "An airline has been deleted"})
 }

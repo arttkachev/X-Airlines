@@ -12,6 +12,9 @@ import (
 	engineController "github.com/arttkachev/X-Airlines/Backend/controllers"
 	userController "github.com/arttkachev/X-Airlines/Backend/controllers"
 	"github.com/arttkachev/X-Airlines/Backend/services"
+	auth "github.com/arttkachev/X-Airlines/Backend/services/auth"
+	"github.com/gin-contrib/sessions"
+	redisSession "github.com/gin-contrib/sessions/redis"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis"
 	"github.com/joho/godotenv"
@@ -28,6 +31,8 @@ func Welcome(c *gin.Context) {
 }
 
 func main() {
+	// init redis store for user session cookies
+	store, _ := redisSession.NewStore(10, "tcp", "localhost:6379", "", []byte("secret"))
 
 	// init Redis client
 	redisClient := redis.NewClient(&redis.Options{
@@ -73,6 +78,7 @@ func main() {
 	}
 
 	fmt.Println(database)
+	AuthService := auth.AuthService{}
 	services.CreateUserService(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("USERS")), redisClient)
 	services.CreateAircraftService(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("AIRCRAFT")), redisClient)
 	services.CreateEngineService(client.Database(os.Getenv("DATABASE")).Collection(os.Getenv("ENGINES")), redisClient)
@@ -85,54 +91,65 @@ func main() {
 	// create a router
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
+	router.Use(sessions.Sessions("x-airlines_api", store))
+	authorized := router.Group("/")
+	authorized.Use(AuthService.AuthMiddleware())
+	{
+		// users
+		authorized.GET("/users", userController.GetUsers)
+		authorized.GET("/users/airline_filter", userController.GetUserByAirline)
+		authorized.GET("/users/:id/get_airlines", userController.GetUserAirlinesData)
+		authorized.PUT("/users/:id", userController.UpdateUser)
+		authorized.PUT("/users/:id/update_airlines", userController.UpdateUserAirlines)
+		authorized.DELETE("/users/:id", userController.DeleteUser)
+
+		// aircraft
+		authorized.GET("/aircraft", aircraftController.GetAircraft)
+		authorized.GET("/aircraft/:id", aircraftController.GetAircraftById)
+		authorized.GET("/aircraft/aircraft_filter", aircraftController.GetAircraftByType)
+		authorized.POST("/aircraft", aircraftController.CreateAircraft)
+		authorized.DELETE("/aircraft/:id", aircraftController.DeleteAircraft)
+		authorized.PUT("/aircraft/:id/update_airframe", aircraftController.UpdateAirframe)
+		authorized.PUT("/aircraft/:id/update_exterior", aircraftController.UpdateExterior)
+		authorized.PUT("/aircraft/:id/update_interior", aircraftController.UpdateInterior)
+		authorized.PUT("/aircraft/:id/update_engines", aircraftController.UpdateEngines)
+		authorized.PUT("/aircraft/:id/update_cockpit", aircraftController.UpdateCockpit)
+		authorized.PUT("/aircraft/:id/update_general", aircraftController.UpdateGeneral)
+		authorized.PUT("/aircraft/:id/update_performance", aircraftController.UpdatePerformance)
+		authorized.PUT("/aircraft/:id/update_tags", aircraftController.UpdateTags)
+		authorized.PUT("/aircraft/:id/update_owner", aircraftController.UpdateOwner)
+		authorized.GET("/aircraft/:id/get_owner", aircraftController.GetOwnerData)
+		authorized.GET("/aircraft/:id/get_engines", aircraftController.GetEngineData)
+		authorized.GET("/aircraft/:id/get_airline", aircraftController.GetAirlineData)
+
+		// engines
+		authorized.GET("/engines", engineController.GetEngines)
+		authorized.GET("/engines/:id", engineController.GetEngineById)
+		authorized.POST("/engines", engineController.CreateEngine)
+		authorized.PUT("/engines/:id", engineController.UpdateEngine)
+		authorized.DELETE("/engines/:id", engineController.DeleteEngine)
+
+		// airlines
+		authorized.GET("/airlines", airlineController.GetAirlines)
+		authorized.POST("/airlines", airlineController.CreateAirline)
+		authorized.DELETE("/airlines/:id", airlineController.DeleteAirline)
+
+		authorized.PUT("/airlines/:id/update_general", airlineController.UpdateAirlineGeneral)
+		authorized.PUT("/airlines/:id/update_review", airlineController.UpdateReviews)
+		authorized.PUT("/airlines/:id/update_routes", airlineController.UpdateRoutes)
+		authorized.PUT("/airlines/:id/update_fleet", airlineController.UpdateFleet)
+		authorized.PUT("/airlines/:id/update_owner", airlineController.UpdateAirlineOwner)
+		authorized.GET("/airlines/:id/get_fleet", airlineController.GetFleetData)
+		authorized.GET("/airlines/:id/get_owner", airlineController.GetAirlineOwnerData)
+	}
 
 	// handlers
-	// users
+	// sign in/ sign out
+	router.POST("/signup", AuthService.SignUp)
+	router.POST("/signin", AuthService.SignIn)
+	router.POST("/signout", AuthService.SignOut)
+	router.POST("/refresh", AuthService.Refresh)
 	router.GET("/", Welcome)
-	router.GET("/users", userController.GetUsers)
-	router.GET("/users/airline_filter", userController.GetUserByAirline)
-	router.POST("/users", userController.CreateUser)
-	router.PUT("/users/:id", userController.UpdateUser)
-	router.DELETE("/users/:id", userController.DeleteUser)
-
-	// aircraft
-	router.GET("/aircraft", aircraftController.GetAircraft)
-	router.GET("/aircraft/:id", aircraftController.GetAircraftById)
-	router.GET("/aircraft/aircraft_filter", aircraftController.GetAircraftByType)
-	router.POST("/aircraft", aircraftController.CreateAircraft)
-	router.DELETE("/aircraft/:id", aircraftController.DeleteAircraft)
-	router.PUT("/aircraft/:id/update_airframe", aircraftController.UpdateAirframe)
-	router.PUT("/aircraft/:id/update_exterior", aircraftController.UpdateExterior)
-	router.PUT("/aircraft/:id/update_interior", aircraftController.UpdateInterior)
-	router.PUT("/aircraft/:id/update_engines", aircraftController.UpdateEngines)
-	router.PUT("/aircraft/:id/update_cockpit", aircraftController.UpdateCockpit)
-	router.PUT("/aircraft/:id/update_general", aircraftController.UpdateGeneral)
-	router.PUT("/aircraft/:id/update_performance", aircraftController.UpdatePerformance)
-	router.PUT("/aircraft/:id/update_tags", aircraftController.UpdateTags)
-	router.PUT("/aircraft/:id/update_owner", aircraftController.UpdateOwner)
-	router.GET("/aircraft/:id/get_owner", aircraftController.GetOwnerData)
-	router.GET("/aircraft/:id/get_engines", aircraftController.GetEngineData)
-	router.GET("/aircraft/:id/get_airline", aircraftController.GetAirlineData)
-
-	// engines
-	router.GET("/engines", engineController.GetEngines)
-	router.GET("/engines/:id", engineController.GetEngineById)
-	router.POST("/engines", engineController.CreateEngine)
-	router.PUT("/engines/:id", engineController.UpdateEngine)
-	router.DELETE("/engines/:id", engineController.DeleteEngine)
-
-	// airlines
-	router.GET("/airlines", airlineController.GetAirlines)
-	router.POST("/airlines", airlineController.CreateAirline)
-	router.DELETE("/airlines/:id", airlineController.DeleteAirline)
-
-	router.PUT("/airlines/:id/update_general", airlineController.UpdateAirlineGeneral)
-	router.PUT("/airlines/:id/update_review", airlineController.UpdateReviews)
-	router.PUT("/airlines/:id/update_routes", airlineController.UpdateRoutes)
-	router.PUT("/airlines/:id/update_fleet", airlineController.UpdateFleet)
-	router.PUT("/airlines/:id/update_owner", airlineController.UpdateAirlineOwner)
-	router.GET("/airlines/:id/get_fleet", airlineController.GetFleetData)
-	router.GET("/airlines/:id/get_owner", airlineController.GetAirlineOwnerData)
 
 	// listen and serve
 	router.Run(port)

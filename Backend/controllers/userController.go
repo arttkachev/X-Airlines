@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/arttkachev/X-Airlines/Backend/api/models/airline"
 	"github.com/arttkachev/X-Airlines/Backend/api/models/user"
 	"github.com/arttkachev/X-Airlines/Backend/services"
 	"github.com/gin-gonic/gin"
@@ -16,38 +17,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
-
-func CreateUser(c *gin.Context) {
-	var user user.User
-	err := c.ShouldBindJSON(&user) // ShouldBindJSON marshals the incoming request body into a struct passed in as an argument (it's user in our case)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error()})
-		return
-	}
-	// create context
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	// generate a unique id for a user
-	user.ID = primitive.NewObjectID()
-	// get db collection
-	var userService = services.GetUserService()
-	collection := userService.Collection
-	// add a new user
-	if user.Airlines == nil {
-		user.Airlines = make([]string, 0)
-	}
-	_, err = collection.InsertOne(ctx, user)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error()})
-		return
-	}
-	// clear cache
-	log.Println("Remove user data from Redis")
-	userService.RedisClient.Del("users")
-	c.JSON(http.StatusOK, user) // sends a response with httpStatusOK and a newly created user as a JSON
-}
 
 func GetUsers(c *gin.Context) {
 	userService := services.GetUserService()
@@ -191,13 +160,7 @@ func UpdateUser(c *gin.Context) {
 			{"$cond", bson.D{
 				{"if", user.Balance != nil},
 				{"then", user.Balance},
-				{"else", "$balance"}}}}},
-
-		{"airlines", bson.D{
-			{"$cond", bson.D{
-				{"if", bson.D{{"$in", bson.A{bson.D{{"$first", bson.A{bson.D{{"$ifNull", bson.A{user.Airlines, bson.A{}}}}}}}, "$airlines"}}}},
-				{"then", bson.D{{"$setDifference", bson.A{"$airlines", user.Airlines}}}},
-				{"else", bson.D{{"$concatArrays", bson.A{"$airlines", bson.D{{"$ifNull", bson.A{user.Airlines, bson.A{}}}}}}}}}}}}}}}
+				{"else", "$balance"}}}}}}}}
 
 	// update
 	_, err = collection.UpdateOne(ctx, filter, mongo.Pipeline{update})
@@ -215,18 +178,49 @@ func UpdateUser(c *gin.Context) {
 }
 
 func DeleteUser(c *gin.Context) {
-	// create context
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	// get db collection
-	userService := services.GetUserService()
-	collection := userService.Collection
-	// fetch the user id from the request URL
 	id := c.Param("id")
 	objectId, _ := primitive.ObjectIDFromHex(id)
-	// delete by id
-	deleteResult, _ := collection.DeleteOne(ctx, bson.M{"_id": objectId})
-	// respond an error if something's wrong (for example, a wrong id)
+	userService := services.GetUserService()
+	var user user.User
+	userVal, err := userService.RedisClient.Get("users/" + id).Result()
+	if err == redis.Nil {
+		log.Printf("Request to MongoDB")
+		err = userService.Collection.FindOne(ctx, bson.M{"_id": objectId}).Decode(user)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error()})
+			return
+		}
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error()})
+		return
+	} else {
+		log.Printf("Request to Redis")
+		json.Unmarshal([]byte(userVal), &user)
+
+	}
+	airlineService := services.GetAirlineService()
+	for _, x := range user.Airlines {
+		airlineId := x.Hex()
+		airlineObjectId, err := primitive.ObjectIDFromHex(airlineId)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error()})
+			return
+		}
+		_, err = airlineService.Collection.DeleteOne(ctx, bson.M{"_id": airlineObjectId})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error()})
+			return
+		}
+		log.Println("Remove airline id data from Redis")
+		airlineService.RedisClient.Del("airlines/" + airlineId)
+	}
+	deleteResult, _ := userService.Collection.DeleteOne(ctx, bson.M{"_id": objectId})
 	if deleteResult.DeletedCount == 0 {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Error on deleting a user"})
@@ -236,7 +230,162 @@ func DeleteUser(c *gin.Context) {
 	log.Println("Remove user data from Redis")
 	userService.RedisClient.Del("users")
 	userService.RedisClient.Del("users/" + id)
-	// respond a message to a client if everything is ok
+	log.Println("Remove airlines data from Redis")
+	airlineService.RedisClient.Del("airlines")
 	c.JSON(http.StatusOK, gin.H{
 		"message": "A user has been deleted"})
+}
+
+func GetUserAirlinesData(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	userId := c.Param("id")
+	var user user.User
+	userService := services.GetUserService()
+	val, err := userService.RedisClient.Get("users/" + userId).Result()
+	if err == redis.Nil {
+		log.Printf("Request to MongoDB")
+		aircraftObjectId, err := primitive.ObjectIDFromHex(userId)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error()})
+			return
+		}
+		err = userService.Collection.FindOne(ctx, bson.M{"_id": aircraftObjectId}).Decode(&user)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error()})
+			return
+		}
+		// Redis value has to be a string, so, we need to Marshal users first and put users on a Redis server
+		data, _ := json.Marshal(user)
+		userService.RedisClient.Set("users/"+userId, string(data), 0)
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error()})
+		return
+	} else {
+		log.Printf("Request to Redis")
+		json.Unmarshal([]byte(val), &user)
+	}
+	airlineService := services.GetAirlineService()
+	var airlines []airline.Airline
+	for _, x := range user.Airlines {
+		airlineId := x.Hex()
+		airlineObjectId, err := primitive.ObjectIDFromHex(airlineId)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error()})
+			return
+		}
+		var airline airline.Airline
+		engineVal, err := airlineService.RedisClient.Get("airlines/" + airlineId).Result()
+		if err == redis.Nil {
+			log.Printf("Request to MongoDB")
+			err = airlineService.Collection.FindOne(ctx, bson.M{"_id": airlineObjectId}).Decode(&airline)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": err.Error()})
+				return
+			}
+			// Redis value has to be a string, so, we need to Marshal users first and put users on a Redis server
+			data, _ := json.Marshal(airline)
+			airlineService.RedisClient.Set("airlines/"+airlineId, string(data), 0)
+			airlines = append(airlines, airline)
+
+		} else if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error()})
+			return
+		} else {
+			log.Printf("Request to Redis")
+			json.Unmarshal([]byte(engineVal), &airline)
+			airlines = append(airlines, airline)
+
+		}
+	}
+	if len(airlines) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "The user does not own airlines"})
+		return
+	}
+	c.JSON(http.StatusOK, airlines)
+}
+
+func UpdateUserAirlines(c *gin.Context) {
+	var user user.User
+	userService := services.GetUserService()
+	airlineService := services.GetAirlineService()
+	err := c.ShouldBindJSON(&user)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error()})
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	id := c.Param("id")
+	userObjectId, _ := primitive.ObjectIDFromHex(id)
+	filter := bson.D{{"_id", userObjectId}}
+	update := bson.D{{"$set", bson.D{
+		{"airlines", bson.D{
+			{"$cond", bson.D{
+				{"if", bson.D{{"$in", bson.A{bson.D{{"$first", bson.A{bson.D{{"$ifNull", bson.A{user.Airlines, bson.A{}}}}}}}, "$airlines"}}}},
+				{"then", bson.D{{"$setDifference", bson.A{"$airlines", user.Airlines}}}},
+				{"else", bson.D{{"$concatArrays", bson.A{"$airlines", bson.D{{"$ifNull", bson.A{user.Airlines, bson.A{}}}}}}}}}}}}}}}
+
+	_, err = userService.Collection.UpdateOne(ctx, filter, mongo.Pipeline{update})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error()})
+		return
+	}
+	for _, x := range user.Airlines {
+		var airline airline.Airline
+		airlineId := x.Hex()
+		airlineObjectId, _ := primitive.ObjectIDFromHex(airlineId)
+		airlineVal, err := airlineService.RedisClient.Get("airlines/" + airlineId).Result()
+		if err == redis.Nil {
+			log.Printf("Request to MongoDB")
+			err = airlineService.Collection.FindOne(ctx, bson.M{"_id": airlineObjectId}).Decode(&airline)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": err.Error()})
+				return
+			}
+			// Redis value has to be a string, so, we need to Marshal users first and put users on a Redis server
+			data, _ := json.Marshal(airline)
+			airlineService.RedisClient.Set("airlines/"+airlineId, string(data), 0)
+
+		} else if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error()})
+			return
+		} else {
+			log.Printf("Request to Redis")
+			json.Unmarshal([]byte(airlineVal), &airline)
+		}
+		filter := bson.D{{"_id", airlineObjectId}}
+		update := bson.D{{"$set", bson.D{
+			{"owner", bson.D{
+				{"$cond", bson.D{
+					{"if", airline.Owner == userObjectId},
+					{"then", primitive.NilObjectID},
+					{"else", userObjectId}}}}}}}}
+		_, err = airlineService.Collection.UpdateOne(ctx, filter, mongo.Pipeline{update})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error()})
+			return
+		}
+		log.Println("Remove airline id data from Redis")
+		airlineService.RedisClient.Del("airlines/" + airlineId)
+	}
+	log.Println("Remove users data from Redis")
+	userService.RedisClient.Del("users")
+	userService.RedisClient.Del("users/" + id)
+	log.Println("Remove airline data from Redis")
+	airlineService.RedisClient.Del("airlines")
+	c.JSON(http.StatusOK, gin.H{
+		"message": "The user airlines have been updated"})
 }
